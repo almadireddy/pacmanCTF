@@ -84,7 +84,7 @@ class GameState:
   agent configurations and score changes.
 
   GameStates are used by the Game object to capture the actual state of the game and
-  can be used by agents to reason about the game.
+  can be used by agents to reason about the  game.
 
   Much of the information in a GameState is stored in a GameStateData object.  We
   strongly suggest that you access that data via the accessor methods below rather

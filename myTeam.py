@@ -22,6 +22,8 @@ import game
 # Team creation #
 #################
 
+infinity = float('inf')
+
 def createTeam(firstIndex, secondIndex, isRed,
                first='DummyAgent', second='DummyAgent'):
     """
@@ -46,6 +48,72 @@ def createTeam(firstIndex, secondIndex, isRed,
 ##########
 # Agents #
 ##########
+
+def evaluate_state(game_state):
+    if game_state.isRed:
+        if len(game_state.getRedCapsules()) > len(game_state.getBlueCapsules()):
+            return 1
+    else:
+        if len(game_state.getRedCapsules()) < len(game_state.getBlueCapsules()):
+            return -1
+
+
+def alpha_beta_cutoff_search(state, game, d=4, cutoff_test=None, eval_fn=None):
+    player = game.to_move(state)
+
+    def max_value(st, alpha, beta, depth):
+        if cutoff_test(st, depth):
+            return eval_fn(st)
+
+        val = -infinity
+        for action in game.getLegalActions(st):
+            val = max(val, min_value(game.result(st, action), alpha, beta, depth + 1))
+
+            if val >= beta:
+                return val
+
+            alpha = max(alpha, val)
+
+        return val
+
+    def min_value(st, alpha, beta, depth):
+        if cutoff_test(st, depth):
+            return eval_fn(st)
+
+        val = infinity
+        for action in game.getLegalActions(st):
+            val = min(val, max_value(game.result(st, action), alpha, beta, depth + 1))
+
+            if val <= alpha:
+                return val
+
+            beta = min(beta, val)
+
+        return val
+
+    cutoff_test = (cutoff_test or (lambda st, depth: depth > d or game.terminal_test(st)))
+    eval_fn = eval_fn or (lambda st: game.utility(st, player))
+    best_score = -infinity
+    beta = infinity
+    best_action = None
+
+    for ac in game.getLegalActions(state):
+        v = min_value(game.result(state, ac), best_score, beta, 1)
+
+        if v > best_score:
+            best_score = v
+            best_action = ac
+
+    return best_action
+
+
+class AlphaBetaAgent(CaptureAgent):
+    def registerInitialState(self, gameState):
+        raise NotImplementedError
+
+    def chooseAction(self, gameState):
+        return alpha_beta_cutoff_search(gameState, game, 5, None, evaluate_state)
+
 
 class DummyAgent(CaptureAgent):
     """
