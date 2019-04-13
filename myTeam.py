@@ -24,8 +24,9 @@ import game
 
 infinity = float('inf')
 
+
 def createTeam(firstIndex, secondIndex, isRed,
-               first='DummyAgent', second='DummyAgent'):
+               first='AlphaBetaAgent', second='AlphaBetaAgent'):
     """
     This function should return a list of two agents that will form the
     team, initialized using firstIndex and secondIndex as their agent
@@ -49,25 +50,17 @@ def createTeam(firstIndex, secondIndex, isRed,
 # Agents #
 ##########
 
-def evaluate_state(game_state):
-    if game_state.isRed:
-        if len(game_state.getRedCapsules()) > len(game_state.getBlueCapsules()):
-            return 1
-    else:
-        if len(game_state.getRedCapsules()) < len(game_state.getBlueCapsules()):
-            return -1
+def alpha_beta_cutoff_search(game_state, d=4, cutoff_test=None, eval_fn=None, max_player_index=0):
+    player = max_player_index
 
-
-def alpha_beta_cutoff_search(state, game, d=4, cutoff_test=None, eval_fn=None):
-    player = game.to_move(state)
-
-    def max_value(st, alpha, beta, depth):
+    def max_value(st, alpha, beta, depth, player):
         if cutoff_test(st, depth):
-            return eval_fn(st)
+            return eval_fn(st, player)
 
         val = -infinity
-        for action in game.getLegalActions(st):
-            val = max(val, min_value(game.result(st, action), alpha, beta, depth + 1))
+        for action in game_state.getLegalActions(player%4):
+            print "depth: ", depth, " | max: ", action
+            val = max(val, min_value(game_state.generateSuccessor(player%4, action), alpha, beta, depth + 1, player + 1))
 
             if val >= beta:
                 return val
@@ -76,13 +69,14 @@ def alpha_beta_cutoff_search(state, game, d=4, cutoff_test=None, eval_fn=None):
 
         return val
 
-    def min_value(st, alpha, beta, depth):
+    def min_value(st, alpha, beta, depth, player):
         if cutoff_test(st, depth):
-            return eval_fn(st)
+            return eval_fn(st, player)
 
         val = infinity
-        for action in game.getLegalActions(st):
-            val = min(val, max_value(game.result(st, action), alpha, beta, depth + 1))
+        for action in game_state.getLegalActions(player%4):
+            print "depth: ", depth, " | min: ", action
+            val = min(val, max_value(game_state.generateSuccessor(player%4, action), alpha, beta, depth + 1, player + 1))
 
             if val <= alpha:
                 return val
@@ -91,14 +85,15 @@ def alpha_beta_cutoff_search(state, game, d=4, cutoff_test=None, eval_fn=None):
 
         return val
 
-    cutoff_test = (cutoff_test or (lambda st, depth: depth > d or game.terminal_test(st)))
-    eval_fn = eval_fn or (lambda st: game.utility(st, player))
+    cutoff_test = (cutoff_test or (lambda st, depth: depth > d or st.isOver()))
+    eval_fn = eval_fn
     best_score = -infinity
     beta = infinity
     best_action = None
 
-    for ac in game.getLegalActions(state):
-        v = min_value(game.result(state, ac), best_score, beta, 1)
+    for ac in game_state.getLegalActions(player):
+        print "first level action: ", ac
+        v = min_value(game_state.generateSuccessor(player, ac), best_score, beta, 1, player)
 
         if v > best_score:
             best_score = v
@@ -106,13 +101,42 @@ def alpha_beta_cutoff_search(state, game, d=4, cutoff_test=None, eval_fn=None):
 
     return best_action
 
-
 class AlphaBetaAgent(CaptureAgent):
-    def registerInitialState(self, gameState):
-        raise NotImplementedError
+    def registerInitialState(self, game_state):
+        CaptureAgent.registerInitialState(self, game_state)
 
-    def chooseAction(self, gameState):
-        return alpha_beta_cutoff_search(gameState, game, 5, None, evaluate_state)
+    def chooseAction(self, game_state):
+        return alpha_beta_cutoff_search(game_state, 2, None, self.utility, self.index)
+
+    def utility(self, game_state, index):
+        if index%4 in game_state.getRedTeamIndices():  # we are red
+            capsule_difference = len(game_state.getBlueCapsules()) - len(game_state.getRedCapsules())
+            return capsule_difference + game_state.getScore()
+
+        else:
+            capsule_difference = len(game_state.getRedCapsules()) - len(game_state.getBlueCapsules())
+            food = game_state.getRedFood()
+            lowest_distance = 10000
+            pos = game_state.getAgentPosition(index%4)
+            my_food = game_state.getBlueFood()
+            remaining = 0
+
+            for i, x in enumerate(food):
+                for j, y in enumerate(food[i]):
+                    if food[i][j]:
+                        length = self.distancer.getDistance(pos, (i, j))
+
+                        if length < lowest_distance:
+                            lowest_distance = length
+
+            for i, x in enumerate(my_food):
+                for j, y in enumerate(my_food[i]):
+                    if my_food[i][j]:
+                        remaining += 1
+
+            eval = capsule_difference - game_state.getScore() - lowest_distance + remaining
+            print " -- ", eval
+            return eval
 
 
 class DummyAgent(CaptureAgent):
