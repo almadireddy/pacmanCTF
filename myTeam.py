@@ -16,17 +16,18 @@ from captureAgents import CaptureAgent
 import random, time, util
 from game import Directions
 import game
+from capture import GameState
 
 
 #################
 # Team creation #
 #################
 
-def createTeam(firstIndex, secondIndex, isRed,
-               first='DummyAgent', second='DummyAgent'):
+def createTeam(first_index, second_index, isRed,
+               first='MiniMaxAgent', second='DummyAgent'):
     """
     This function should return a list of two agents that will form the
-    team, initialized using firstIndex and secondIndex as their agent
+    team, initialized using first_index and second_index as their agent
     index numbers.  isRed is True if the red team is being created, and
     will be False if the blue team is being created.
 
@@ -40,12 +41,59 @@ def createTeam(firstIndex, secondIndex, isRed,
     """
 
     # The following line is an example only; feel free to change it.
-    return [eval(first)(firstIndex), eval(second)(secondIndex)]
+    return [eval(first)(first_index), eval(second)(second_index)]
 
 
 ##########
 # Agents #
 ##########
+
+
+class MiniMaxAgent(CaptureAgent):
+    """
+    A Dummy agent to serve as an example of the necessary agent structure.
+    You should look at baselineTeam.py for more details about how to
+    create an agent as this is the bare minimum.
+    """
+
+    def registerInitialState(self, gameState):
+        """
+        This method handles the initial setup of the
+        agent to populate useful fields (such as what team
+        we're on).
+
+        A distanceCalculator instance caches the maze distances
+        between each pair of positions, so your agents can use:
+        self.distancer.getDistance(p1, p2)
+
+        IMPORTANT: This method may run for at most 15 seconds.
+        """
+        CaptureAgent.registerInitialState(self, gameState)
+
+    def chooseAction(self, game_state):
+        def value(game_state, depth, index):
+            # type: (GameState, int, int) -> int
+            return self.index
+
+        def max_value(game_state, index, depth):
+            # type: (GameState, int, int) -> str
+            v = -1000000
+
+            for action in game_state.getLegalActions(index):
+                v = max(v, value(game_state.generateSuccessor(index, action), depth + 1, index + 1))
+            return v
+
+        def min_value(game_state, index, depth):
+            # type: (GameState, int, int) -> str
+            v = 1000000
+            for action in game_state.getLegalActions(index):
+                v = min(v, value(game_state.generateSuccessor(index, action), depth + 1, index + 1))
+            return v
+        
+        def utility(game_state):
+            # type: (GameState) -> int
+            return 0
+
 
 class DummyAgent(CaptureAgent):
     """
