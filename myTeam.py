@@ -24,7 +24,7 @@ from capture import GameState
 #################
 
 def createTeam(first_index, second_index, isRed,
-               first='MiniMaxAgent', second='DummyAgent'):
+               first='MiniMaxAgent', second='MiniMaxAgent'):
     """
     This function should return a list of two agents that will form the
     team, initialized using first_index and second_index as their agent
@@ -41,7 +41,7 @@ def createTeam(first_index, second_index, isRed,
     """
 
     # The following line is an example only; feel free to change it.
-    return [eval(first)(first_index), eval(second)(second_index)]
+    return [eval(first)(first_index, isRed), eval(second)(second_index, isRed)]
 
 
 ##########
@@ -55,8 +55,13 @@ class MiniMaxAgent(CaptureAgent):
     You should look at baselineTeam.py for more details about how to
     create an agent as this is the bare minimum.
     """
+    def __init__(self, index, isRed):
+        CaptureAgent.__init__(self, index)
+        self.isRed = isRed  # maximize on red if true
+        self.redTeamIndices = False
 
-    def registerInitialState(self, gameState):
+    def registerInitialState(self, game_state):
+        # type: (GameState) -> None
         """
         This method handles the initial setup of the
         agent to populate useful fields (such as what team
@@ -68,31 +73,61 @@ class MiniMaxAgent(CaptureAgent):
 
         IMPORTANT: This method may run for at most 15 seconds.
         """
-        CaptureAgent.registerInitialState(self, gameState)
+        CaptureAgent.registerInitialState(self, game_state)
+
+        self.redTeamIndices = game_state.getRedTeamIndices()
 
     def chooseAction(self, game_state):
-        def value(game_state, depth, index):
-            # type: (GameState, int, int) -> int
-            return self.index
+        # type: (GameState) -> str
+        def value(game_state, depth, next_index, action):
+            # type: (GameState, int, int, str) -> int
 
-        def max_value(game_state, index, depth):
-            # type: (GameState, int, int) -> str
+            max_depth = 3
+            if depth > max_depth:
+                return utility(game_state)
+            if game_state.isOver():
+                return game_state.getScore()*100
+
+            if next_index % 4 in self.redTeamIndices:
+                if self.isRed:
+                    return max_value(game_state.generateSuccessor(next_index % 4, action), depth + 1, next_index + 1)
+                else:
+                    return min_value(game_state.generateSuccessor(next_index % 4, action), depth + 1, next_index + 1)
+            else:
+                if self.isRed:
+                    return min_value(game_state.generateSuccessor(next_index % 4, action), depth + 1, next_index + 1)
+                else:
+                    return max_value(game_state.generateSuccessor(next_index % 4, action), depth + 1, next_index + 1)
+
+        def max_value(game_state, depth, index):
+            # type: (GameState, int, int) -> int
             v = -1000000
 
-            for action in game_state.getLegalActions(index):
-                v = max(v, value(game_state.generateSuccessor(index, action), depth + 1, index + 1))
+            for action in game_state.getLegalActions(index % 4):
+                v = max(v, value(game_state.generateSuccessor(index % 4, action), depth, index, action))
             return v
 
         def min_value(game_state, index, depth):
-            # type: (GameState, int, int) -> str
+            # type: (GameState, int, int) -> int
             v = 1000000
-            for action in game_state.getLegalActions(index):
-                v = min(v, value(game_state.generateSuccessor(index, action), depth + 1, index + 1))
+            for action in game_state.getLegalActions(index % 4):
+                v = min(v, value(game_state.generateSuccessor(index % 4, action), depth + 1, index + 1, action))
             return v
-        
+
         def utility(game_state):
             # type: (GameState) -> int
             return 0
+
+        best_action = None
+        best_value = None
+        print game_state.getLegalActions(self.index)
+        for ac in game_state.getLegalActions(self.index):
+            val = value(game_state, 0, self.index, ac)
+            if val > best_value:
+                best_action = ac
+                best_value = val
+
+        return best_action
 
 
 class DummyAgent(CaptureAgent):
