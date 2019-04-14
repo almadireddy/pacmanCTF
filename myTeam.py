@@ -17,6 +17,7 @@ import random, time, util
 from game import Directions
 import game
 import math
+from capture import GameState
 
 #################
 # Team creation #
@@ -50,10 +51,12 @@ def createTeam(firstIndex, secondIndex, isRed,
 # Agents #
 ##########
 
-def alpha_beta_cutoff_search(game_state, d=4, cutoff_test=None, eval_fn=None, max_player_index=0):
+def alpha_beta_cutoff_search(game_state, d=4, eval_fn=None, max_player_index=0):
     player = max_player_index
 
     def max_value(st, alpha, beta, depth, player):
+        # type: (GameState, int, int, int, int) -> int
+
         if cutoff_test(st, depth):
             return eval_fn(st, player)
 
@@ -71,6 +74,8 @@ def alpha_beta_cutoff_search(game_state, d=4, cutoff_test=None, eval_fn=None, ma
         return val
 
     def min_value(st, alpha, beta, depth, player):
+        # type: (GameState, int, int, int, int) -> int
+
         if cutoff_test(st, depth):
             return eval_fn(st, player)
 
@@ -87,14 +92,17 @@ def alpha_beta_cutoff_search(game_state, d=4, cutoff_test=None, eval_fn=None, ma
 
         return val
 
-    cutoff_test = (cutoff_test or (lambda st, depth: depth > d or st.isOver()))
+    def cutoff_test(st, depth):
+        # type: (GameState, int) -> bool
+        return depth > d or st.isOver()
+
     eval_fn = eval_fn
     best_score = -infinity
     beta = infinity
     best_action = None
 
     for ac in game_state.getLegalActions(player):
-        v = min_value(game_state.generateSuccessor(player, ac), best_score, beta, 1, player)
+        v = min_value(game_state.generateSuccessor(player, ac), best_score, beta, 1, player + 1)
 
         if v > best_score:
             best_score = v
@@ -108,7 +116,7 @@ class AlphaBetaAgent(CaptureAgent):
         CaptureAgent.registerInitialState(self, game_state)
 
     def chooseAction(self, game_state):
-        return alpha_beta_cutoff_search(game_state, 4, None, self.utility, self.index)
+        return alpha_beta_cutoff_search(game_state, 4, self.utility, self.index)
 
     def utility(self, game_state, index):
         carrying = game_state.getAgentState(index % 4).numCarrying
