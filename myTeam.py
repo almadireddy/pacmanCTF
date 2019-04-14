@@ -16,7 +16,7 @@ from captureAgents import CaptureAgent
 import random, time, util
 from game import Directions
 import game
-
+import math
 
 #################
 # Team creation #
@@ -58,9 +58,10 @@ def alpha_beta_cutoff_search(game_state, d=4, cutoff_test=None, eval_fn=None, ma
             return eval_fn(st, player)
 
         val = -infinity
-        for action in game_state.getLegalActions(player%4):
+        for action in game_state.getLegalActions(player % 4):
             print "depth: ", depth, " | max: ", action
-            val = max(val, min_value(game_state.generateSuccessor(player%4, action), alpha, beta, depth + 1, player + 1))
+            val = max(val,
+                      min_value(game_state.generateSuccessor(player % 4, action), alpha, beta, depth + 1, player + 1))
 
             if val >= beta:
                 return val
@@ -74,9 +75,10 @@ def alpha_beta_cutoff_search(game_state, d=4, cutoff_test=None, eval_fn=None, ma
             return eval_fn(st, player)
 
         val = infinity
-        for action in game_state.getLegalActions(player%4):
+        for action in game_state.getLegalActions(player % 4):
             print "depth: ", depth, " | min: ", action
-            val = min(val, max_value(game_state.generateSuccessor(player%4, action), alpha, beta, depth + 1, player + 1))
+            val = min(val,
+                      max_value(game_state.generateSuccessor(player % 4, action), alpha, beta, depth + 1, player + 1))
 
             if val <= alpha:
                 return val
@@ -92,51 +94,66 @@ def alpha_beta_cutoff_search(game_state, d=4, cutoff_test=None, eval_fn=None, ma
     best_action = None
 
     for ac in game_state.getLegalActions(player):
-        print "first level action: ", ac
         v = min_value(game_state.generateSuccessor(player, ac), best_score, beta, 1, player)
 
         if v > best_score:
             best_score = v
             best_action = ac
-
+    print "Best action: ", best_action
     return best_action
+
 
 class AlphaBetaAgent(CaptureAgent):
     def registerInitialState(self, game_state):
         CaptureAgent.registerInitialState(self, game_state)
 
     def chooseAction(self, game_state):
-        return alpha_beta_cutoff_search(game_state, 2, None, self.utility, self.index)
+        return alpha_beta_cutoff_search(game_state, 4, None, self.utility, self.index)
 
     def utility(self, game_state, index):
-        if index%4 in game_state.getRedTeamIndices():  # we are red
-            capsule_difference = len(game_state.getBlueCapsules()) - len(game_state.getRedCapsules())
-            return capsule_difference + game_state.getScore()
+        carrying = game_state.getAgentState(index % 4).numCarrying
+        returned = game_state.getAgentState(index % 4).numReturned
 
+        red = False
+
+        if index % 4 in game_state.getRedTeamIndices():  # we are red
+            red = True
+
+        if red:
+            capsule_difference = len(game_state.getBlueCapsules()) - len(game_state.getRedCapsules())
+            food = game_state.getBlueFood()
+            my_food = game_state.getRedFood()
         else:
             capsule_difference = len(game_state.getRedCapsules()) - len(game_state.getBlueCapsules())
             food = game_state.getRedFood()
-            lowest_distance = 10000
-            pos = game_state.getAgentPosition(index%4)
             my_food = game_state.getBlueFood()
-            remaining = 0
 
-            for i, x in enumerate(food):
-                for j, y in enumerate(food[i]):
-                    if food[i][j]:
-                        length = self.distancer.getDistance(pos, (i, j))
+        lowest_distance = 10000
+        highest_distance = 0
+        pos = game_state.getAgentPosition(index % 4)
+        remaining = 0
 
-                        if length < lowest_distance:
-                            lowest_distance = length
+        for i, x in enumerate(food):
+            for j, y in enumerate(food[i]):
+                if food[i][j]:
+                    length = self.distancer.getDistance(pos, (i, j))
 
-            for i, x in enumerate(my_food):
-                for j, y in enumerate(my_food[i]):
-                    if my_food[i][j]:
-                        remaining += 1
+                    if length < lowest_distance:
+                        lowest_distance = length
+                    if length > highest_distance:
+                        highest_distance = length
 
-            eval = capsule_difference - game_state.getScore() - lowest_distance + remaining
-            print " -- ", eval
-            return eval
+        for i, x in enumerate(my_food):
+            for j, y in enumerate(my_food[i]):
+                if my_food[i][j]:
+                    remaining += 1
+
+        if red:
+            eval = -carrying - returned - capsule_difference - game_state.getScore() + 2**lowest_distance + remaining + ((lowest_distance + highest_distance)/2)
+        else:
+            eval = carrying + returned + capsule_difference + game_state.getScore() - 2**lowest_distance - remaining - ((lowest_distance + highest_distance)/2)
+        print " -- ", eval
+        return eval
 
 
 class DummyAgent(CaptureAgent):
