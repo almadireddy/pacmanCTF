@@ -118,50 +118,6 @@ class AlphaBetaAgent(CaptureAgent):
     def chooseAction(self, game_state):
         return alpha_beta_cutoff_search(game_state, 4, self.utility, self.index)
 
-    def utility(self, game_state, index):
-        carrying = game_state.getAgentState(index % 4).numCarrying
-        returned = game_state.getAgentState(index % 4).numReturned
-
-        red = False
-
-        if index % 4 in game_state.getRedTeamIndices():  # we are red
-            red = True
-
-        if red:
-            capsule_difference = len(game_state.getBlueCapsules()) - len(game_state.getRedCapsules())
-            food = game_state.getBlueFood()
-            my_food = game_state.getRedFood()
-        else:
-            capsule_difference = len(game_state.getRedCapsules()) - len(game_state.getBlueCapsules())
-            food = game_state.getRedFood()
-            my_food = game_state.getBlueFood()
-
-        lowest_distance = 10000
-        highest_distance = 0
-        pos = game_state.getAgentPosition(index % 4)
-        remaining = 0
-
-        for i, x in enumerate(food):
-            for j, y in enumerate(food[i]):
-                if food[i][j]:
-                    length = self.distancer.getDistance(pos, (i, j))
-
-                    if length < lowest_distance:
-                        lowest_distance = length
-                    if length > highest_distance:
-                        highest_distance = length
-
-        for i, x in enumerate(my_food):
-            for j, y in enumerate(my_food[i]):
-                if my_food[i][j]:
-                    remaining += 1
-
-        if red:
-            eval = -carrying - returned - capsule_difference - game_state.getScore() + 2**lowest_distance + remaining + ((lowest_distance + highest_distance)/2)
-        else:
-            eval = carrying + returned + capsule_difference + game_state.getScore() - 2**lowest_distance - remaining - ((lowest_distance + highest_distance)/2)
-        print " -- ", eval
-        return eval
 
 
 class DummyAgent(CaptureAgent):
