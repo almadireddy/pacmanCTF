@@ -118,7 +118,7 @@ class AlphaBetaAgent(CaptureAgent):
     def chooseAction(self, game_state):
         return alpha_beta_cutoff_search(game_state, 4, self.utility, self.index)
 
-    def utility(self, game_state, index):
+    def utility1(self, game_state, index):
         carrying = game_state.getAgentState(index % 4).numCarrying
         returned = game_state.getAgentState(index % 4).numReturned
 
