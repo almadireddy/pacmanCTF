@@ -61,7 +61,7 @@ class AlphaBetaAgent(CaptureAgent):
 
         self.observationHistory = []
         self.offenseWeights = {'eatInvader': 5, 'closeInvader': 0, 'teammateDist': 1.5,
-                               'nearbyFood': -10.0, 'eatCapsule': 10.0, 'normalGhosts': -20, 'eatGhost': 1.0,
+                               'nearbyFood': 10.0, 'eatCapsule': 10.0, 'normalGhosts': -20, 'eatGhost': 1.0,
                                'scaredGhosts': 0.1, 'stuck': -5, 'eatFood': 1}
 
         self.defenseWeights = {'foodCount': -20, 'offenseFood': -1, 'distanceFromStart': 3, 'numInvaders': -40000,
@@ -78,40 +78,40 @@ class AlphaBetaAgent(CaptureAgent):
         else:
             self.isRed = False
 
-    def evaluate_state(self, state, action, index):
-        # type: (GameState, str, int) -> float
+    def evaluate_state(self, state, index):
+        # type: (GameState, int) -> float
         if index in self.friendlyIndex:
             if index == self.index:
                 if self.offense:
-                    return self.evaluate_offence(state, action, index)
+                    return self.evaluate_offence(state, index)
                 else:
-                    return self.evaluate_defense(state, action, index)
+                    return self.evaluate_defense(state, index)
             else:
                 if self.offense:
-                    return self.evaluate_defense(state, action, index)
+                    return self.evaluate_defense(state, index)
                 else:
-                    return self.evaluate_offence(state, action, index)
+                    return self.evaluate_offence(state, index)
 
         else:
-            return self.evaluate_offence(state, action, index)
+            return self.evaluate_offence(state, index)
 
     def chooseAction(self, game_state):
         # type: (GameState) -> Actions
         def alpha_beta_cutoff_search(state, d=4):
             player = self.index
 
-            def max_value(st, alpha, beta, depth, index, action):
-                # type: (GameState, int, int, int, int, str) -> float
+            def max_value(st, alpha, beta, depth, index):
+                # type: (GameState, int, int, int, int) -> float
                 index = index % 4
 
                 if cutoff_test(st, depth):
-                    return self.evaluate_state(st, action, index)
+                    return self.evaluate_state(st, index)
 
                 val = -infinity
-                for action in state.getLegalActions(index):
+                for action in st.getLegalActions(index):
                     val = max(val,
-                              min_value(state.generateSuccessor(index, action),
-                                        alpha, beta, depth + 1, index + 1, action))
+                              min_value(st.generateSuccessor(index, action),
+                                        alpha, beta, depth + 1, index + 1))
 
                     if val >= beta:
                         return val
@@ -120,19 +120,19 @@ class AlphaBetaAgent(CaptureAgent):
 
                 return val
 
-            def min_value(st, alpha, beta, depth, index, action):
-                # type: (GameState, int, int, int, int, str) -> float
+            def min_value(st, alpha, beta, depth, index):
+                # type: (GameState, int, int, int, int) -> float
                 index = index % 4
 
                 if cutoff_test(st, depth):
-                    return self.evaluate_state(st, action, index)
+                    return self.evaluate_state(st, index)
 
                 val = infinity
 
-                for action in state.getLegalActions(index):
+                for action in st.getLegalActions(index):
                     val = min(val,
-                              max_value(state.generateSuccessor(index, action),
-                                        alpha, beta, depth + 1, index + 1, action))
+                              max_value(st.generateSuccessor(index, action),
+                                        alpha, beta, depth + 1, index + 1))
 
                     if val <= alpha:
                         return val
@@ -151,55 +151,37 @@ class AlphaBetaAgent(CaptureAgent):
 
             acs = state.getLegalActions(player)
             for ac in acs:
-                v = min_value(state.generateSuccessor(player, ac), best_score, beta, 1, player + 1, ac)
-
+                v = min_value(state.generateSuccessor(player, ac), best_score, beta, 1, player + 1)
+                print "Action: ", ac, " | Value: ", v
                 if v > best_score:
                     best_score = v
                     best_action = ac
-            print best_action
+            print "Best Action: ", best_action
             return best_action
 
         return alpha_beta_cutoff_search(game_state, 10)
 
-    def get_successor(self, game_state, action):
-        # type: (GameState, str) -> GameState
-        successor = game_state.generateSuccessor(self.index, action)
-        pos = successor.getAgentState(self.index).getPosition()
-        if pos != util.nearestPoint(pos):
-            return successor.generateSuccessor(self.index, action)
-        else:
-            return successor
-
-    def get_offensive_weights(self, gameState, action, index):
-        # type: (GameState, str, int) -> dict
-        if index in self.friendlyIndex:
-            new_dict = {}
-            for x in self.offenseWeights:
-                new_dict[x] = - self.offenseWeights[x]
-            return new_dict
-        return self.offenseWeights
-
-    def get_offensive_features(self, game_state, action):
-        # type: (GameState, Actions) -> util.Counter
+    def get_offensive_features(self, game_state, index):
+        # type: (GameState, int) -> util.Counter
         features = util.Counter()
 
         # Get other variables for later use
         food = self.getFood(game_state)
-        capsules = game_state.getCapsules()
+        capsules = self.getCapsules(game_state)
         food_list = food.asList()
         walls = game_state.getWalls()
-        x, y = game_state.getAgentState(self.index).getPosition()
-        new_x = int(x)
-        new_y = int(y)
+        new_x, new_y = game_state.getAgentState(index).getPosition()
+        new_x, new_y = int(new_x), int(new_y)
+
+        if index in game_state.getRedTeamIndices():
+            opponents = game_state.getBlueTeamIndices()
+        else:
+            opponents = game_state.getRedTeamIndices()
 
         # Get set of invaders and defenders
-        enemies = [game_state.getAgentState(a) for a in self.getOpponents(game_state)]
-        invaders = [a for a in enemies if not a.isPacman and a.getPosition() is not None]
-        defenders = [a for a in enemies if a.isPacman and a.getPosition() is not None]
-
-        # Check if pacman has stopped
-        if action == Directions.STOP:
-            features["stuck"] = 1.0
+        enemies = [game_state.getAgentState(a) for a in opponents]
+        invaders = [a for a in enemies if a.isPacman and a.getPosition() is not None]
+        defenders = [a for a in enemies if not a.isPacman and a.getPosition() is not None]
 
         # Get ghosts close by
         for ghost in invaders:
@@ -214,12 +196,9 @@ class AlphaBetaAgent(CaptureAgent):
                     features["eatGhost"] += 1
             elif ((new_x, new_y) in neighbors) and (ghost.scaredTimer > 0):
                 features["scaredGhosts"] += 1
-            elif game_state.getAgentState(self.index).isPacman and (ghost.scaredTimer > 0):
-                features["scaredGhosts"] = 0
-                features["normalGhosts"] += 1
 
         # How to act if scared or not scared
-        if game_state.getAgentState(self.index).scaredTimer == 0:
+        if game_state.getAgentState(index).scaredTimer == 0:
             for ghost in defenders:
                 ghost_position = ghost.getPosition()
                 neighbors = Actions.getLegalNeighbors(ghost_position, walls)
@@ -240,40 +219,39 @@ class AlphaBetaAgent(CaptureAgent):
 
         # Get capsules when nearby
         for cx, cy in capsules:
-            if new_x == cx and new_y == cy and game_state.getAgentState(self.index).isPacman:
+            if new_x == cx and new_y == cy and game_state.getAgentState(index).isPacman:
                 features["eatCapsule"] = 1.0
 
         # When to eat
-        if not features["normalGhosts"]:
-            if food[new_x][new_y]:
-                features["eatFood"] = 1.0
+        if food[new_x][new_y]:
+            features["eatFood"] = 1.0
 
-            if len(food_list) > 0:
-                temp_food = []
+        if len(food_list) > 0:
+            temp_food = []
 
-                for food in food_list:
-                    food_x, food_y = food
-                    adjusted_index = self.index - self.index % 2
-                    check1 = food_y > (adjusted_index / 2) * walls.height / 3
-                    check2 = food_y < ((adjusted_index / 2) + 1) * walls.height / 3
+            for food in food_list:
+                food_x, food_y = food
+                adjusted_index = index - index % 2
+                check1 = food_y > (adjusted_index / 2) * walls.height / 3
+                check2 = food_y < ((adjusted_index / 2) + 1) * walls.height / 3
 
-                    if check1 and check2:
-                        temp_food.append(food)
+                if check1 and check2:
+                    temp_food.append(food)
 
-                if len(temp_food) == 0:
-                    temp_food = food_list
+            if len(temp_food) == 0:
+                temp_food = food_list
 
-                maze_dist = [self.getMazeDistance((new_x, new_y), food) for food in temp_food]
+            maze_dist = [self.getMazeDistance((new_x, new_y), food) for food in temp_food]
 
-                if min(maze_dist) is not None:
-                    wall_dimensions = walls.width * walls.height
-                    features["nearbyFood"] = float(min(maze_dist)) / wall_dimensions
+            if min(maze_dist) is not None:
+                wall_dimensions = walls.width * walls.height
+                features["nearbyFood"] = float(min(maze_dist))
 
         features.divideAll(10.0)
 
         return features
 
-    def get_defensive_features(self, game_state, action):
+    def get_defensive_features(self, game_state, action=Directions.STOP):
         # type: (GameState, str) -> util.Counter
         features = util.Counter()
         my_state = game_state.getAgentState(self.index)
@@ -337,26 +315,36 @@ class AlphaBetaAgent(CaptureAgent):
 
         return features
 
-    def get_defensive_weights(self, game_state, action, index):
-        # type: (GameState, str, int) -> dict
-        if index in self.friendlyIndex:
+    def get_offensive_weights(self, gameState, index):
+        # type: (GameState, int) -> dict
+        if index not in self.friendlyIndex:
             new_dict = {}
             for x in self.offenseWeights:
                 new_dict[x] = -self.offenseWeights[x]
             return new_dict
+        return self.offenseWeights
+
+    def get_defensive_weights(self, game_state, index):
+        # type: (GameState, int) -> dict
+        if index not in self.friendlyIndex:
+            new_dict = {}
+            for x in self.defenseWeights:
+                new_dict[x] = -self.defenseWeights[x]
+            return new_dict
         return self.defenseWeights
 
-    def evaluate_offence(self, game_state, action, index):
-        # type: (GameState, str, int) -> float
-        features = self.get_offensive_features(game_state, action)
-        weights = self.get_offensive_weights(game_state, action, index)
-        print "Offense: ", action, " | ", index, " | ", features*weights
+    def evaluate_offence(self, game_state, index):
+        # type: (GameState, int) -> float
+        features = self.get_offensive_features(game_state, index)
+        weights = self.get_offensive_weights(game_state, index)
+        # print "Offense: ", index, " | ", features*weights
         return features * weights
 
-    def evaluate_defense(self, game_state, action, index):
-        # type: (GameState, str, int) -> float
-        features = self.get_defensive_features(game_state, action)
-        weights = self.get_defensive_weights(game_state, action, index)
+    def evaluate_defense(self, game_state, index):
+        # type: (GameState, int) -> float
+        features = self.get_defensive_features(game_state)
+        weights = self.get_defensive_weights(game_state, index)
+        # print "Defense: ", index, " | ", features*weights
         return features * weights
 
 
