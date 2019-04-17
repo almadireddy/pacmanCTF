@@ -208,12 +208,11 @@ class OffenseAgent(AlphaBetaAgent):
 
         num_legal_moves = 0
 
-        if nearest_ghost > 3:  # ghost distance threshold
+        if nearest_ghost > 5:  # ghost distance threshold
             nearest_ghost = 0
-        elif 0 < nearest_ghost <= 3:
-            num_legal_moves = len(game_state.getLegalActions(self.index))
-            if is_pac_man:
-                distance_to_capsule *= 10
+
+        if num_carrying >= 2:
+            return_home *= 150
 
         to_return = {
             'score': score,
@@ -251,8 +250,7 @@ class OffenseAgent(AlphaBetaAgent):
                 'foodRemaining': -2500,
                 'nearestGhost': 5000,
                 'returnHome': -8000,
-                'closestCapsule': -1500,
-                'numLegalMoves': 8000
+                'closestCapsule': -1500
             }
 
 
