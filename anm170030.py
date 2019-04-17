@@ -4,7 +4,7 @@
 # educational purposes provided that (1) you do not distribute or publish
 # solutions, (2) you retain this notice, and (3) you provide clear
 # attribution to UC Berkeley, including a link to http://ai.berkeley.edu.
-# 
+#
 # Attribution Information: The Pacman AI projects were developed at UC Berkeley.
 # The core projects and autograders were primarily created by John DeNero
 # (denero@cs.berkeley.edu) and Dan Klein (klein@cs.berkeley.edu).
@@ -27,7 +27,7 @@ infinity = float('inf')
 
 
 def createTeam(firstIndex, secondIndex, isRed,
-               first='AlphaBetaAgent', second='AlphaBetaAgent'):
+               first='OffenseAgent', second='DefenseAgent'):
     """
     This function should return a list of two agents that will form the
     team, initialized using firstIndex and secondIndex as their agent
@@ -44,7 +44,7 @@ def createTeam(firstIndex, secondIndex, isRed,
     """
 
     # The following line is an example only; feel free to change it.
-    return [eval(first)(firstIndex, True), eval(second)(secondIndex, False)]
+    return [eval(first)(firstIndex), eval(second)(secondIndex)]
 
 
 ##########
@@ -52,6 +52,205 @@ def createTeam(firstIndex, secondIndex, isRed,
 ##########
 
 class AlphaBetaAgent(CaptureAgent):
+    def __init__(self, index):
+        CaptureAgent.__init__(self, index)
+
+    def registerInitialState(self, game_state):
+        # type: (GameState) -> None
+        CaptureAgent.registerInitialState(self, game_state)
+
+    def chooseAction(self, gameState):
+        # type: (GameState) -> str
+
+        def alpha_beta_cutoff_search(game_state, d):
+            """Search game to determine best action; use alpha-beta pruning.
+            This version cuts off search and uses an evaluation function."""
+
+            def cutoff_test(state, depth):
+                # type: (GameState, int) -> bool
+                return state.isOver() or depth > d
+
+            # Functions used by alpha-beta
+            def max_value(state, alpha, beta, depth, index):
+                # type: (GameState, int, int, int, int) -> float
+
+                index = index % 4
+
+                if cutoff_test(state, depth):
+                    return self.evaluate_state(state, index)  # pass in whether maximizer or minimizer
+
+                value = -infinity
+                for action in state.getLegalActions(index):
+                    new_state = state.generateSuccessor(index, action).deepCopy()
+                    value = max(value, min_value(new_state,
+                                                 alpha, beta, depth + 1, index + 1))
+                    if value >= beta:
+                        return value
+                    alpha = max(alpha, value)
+
+                return value
+
+            def min_value(state, alpha, beta, depth, index):
+                # type: (GameState, int, int, int, int) -> float
+                index = index % 4
+
+                if cutoff_test(state, depth):
+                    return self.evaluate_state(state, index)  # pass in whether maximizer or minimizer
+
+                value = infinity
+                for action in state.getLegalActions(index):
+                    new_state = state.generateSuccessor(index, action).deepCopy()
+                    value = min(value, max_value(new_state,
+                                                 alpha, beta, depth + 1, index + 1))
+                    if value <= alpha:
+                        return value
+                    beta = min(beta, value)
+                return value
+
+            # Body of alpha-beta_cutoff_search starts here:
+            # The default test cuts off at depth d or at a terminal state
+            best_score = -infinity
+            a = best_score
+            b = infinity
+            best_action = None
+
+            x = [x for x in game_state.getLegalActions(self.index) if x != "Stop"]
+            for ac in x:
+                v = min_value(game_state.generateSuccessor(self.index, ac), a, b, 1, self.index)
+                print "Action: ", ac, "| Score:", v
+                if v > best_score:
+                    best_score = v
+                    best_action = ac
+
+            print " -- Best Value:", best_score, "| Best Action:", best_action
+            print " "
+            return best_action
+
+        return alpha_beta_cutoff_search(gameState, 4)
+
+    def get_weights(self, maximizer=True):
+        # type: (bool) -> dict
+        if maximizer:
+            return {'score': 10}
+        else:
+            return {'score': -10}
+
+    def get_features(self, game_state, index=0):
+        # type: (GameState, int) -> dict
+        return {'score': self.getScore(game_state)}
+
+    def evaluate_state(self, game_state, index=0):
+        # type: (GameState, int) -> float
+
+        maximizer = True if not index == self.index or index == ((self.index + 2) % 4) else False
+        weights = self.get_weights(maximizer)
+        features = self.get_features(game_state, index)
+
+        value = 0
+        for x in weights:
+            value += weights[x] * features[x]
+
+        return value
+
+
+class OffenseAgent(AlphaBetaAgent):
+    def __init__(self, index):
+        CaptureAgent.__init__(self, index)
+        print "My Index:", index
+        self.startPosition = (0, 0)
+        self.isRed = False
+
+    def registerInitialState(self, game_state):
+        # type: (GameState) -> None
+        CaptureAgent.registerInitialState(self, game_state)
+        self.startPosition = game_state.getInitialAgentPosition(self.index)
+        if self.index in game_state.getRedTeamIndices():
+            self.isRed = True
+        print self.startPosition
+
+    def get_features(self, game_state, index=0):
+        # type: (GameState, int) -> dict
+        distance_from_start = self.getMazeDistance(game_state.getAgentPosition(self.index),
+                                                   self.startPosition)
+
+        score = self.getScore(game_state)
+        agent_state = game_state.getAgentState(index)
+        num_carrying = agent_state.numCarrying
+        ''' self.isPacman = isPacman
+            self.scaredTimer = 0
+            self.numCarrying = 0
+            self.numReturned = 0
+        '''
+
+        food_list = self.getFood(game_state).asList()
+        distance_to_food = 0
+        food_remaining = len(food_list)
+
+        if len(food_list) > 0:
+            my_pos = agent_state.getPosition()
+            distance_to_food = min([self.getMazeDistance(my_pos, food) for food in food_list])
+
+        is_pac_man = agent_state.isPacman
+        if not is_pac_man:
+            opposite = game_state.data.layout.getFurthestCorner(self.startPosition)
+            distance_to_minimize = self.getMazeDistance(game_state.getAgentPosition(index),
+                                                        opposite)
+        else:
+            if agent_state.numCarrying > 5:
+                distance_to_minimize = self.getMazeDistance(game_state.getAgentPosition(index),
+                                                            self.startPosition)
+            else:
+                distance_to_minimize = distance_to_food
+
+        to_return = {
+            'score': score,
+            'distanceFromStart': distance_from_start,
+            'closestFood': distance_to_food,
+            'isPacMan': 1 if is_pac_man else 0,
+            'numCarrying': num_carrying,
+            'foodRemaining': food_remaining,
+            'distanceToMinimize': distance_to_minimize
+        }
+
+        print "   -- ", to_return
+        return to_return
+
+    def get_weights(self, maximizer=True):
+        # type: (bool) -> dict
+
+        if maximizer:
+            return {
+                'score': -10,
+                'distanceFromStart': -3,
+                'closestFood': 3,
+                'isPacMan': 10,
+                'distanceToMinimize': -2
+            }
+        else:
+            return {
+                'score': -1000,
+                'closestFood': -500,
+                'isPacMan': 50,
+                'numCarrying': 250,
+                'foodRemaining': -500
+            }
+
+
+class DefenseAgent(AlphaBetaAgent):
+    def __init__(self, index):
+        CaptureAgent.__init__(self, index)
+
+    def registerInitialState(self, game_state):
+        # type: (GameState) -> None
+        CaptureAgent.registerInitialState(self, game_state)
+
+    def chooseAction(self, game_state):
+        # type: (GameState) -> str
+        legal_actions = game_state.getLegalActions(self.index)
+        return legal_actions[random.randint(0, len(legal_actions)-1)]
+
+
+class OldABAgent(CaptureAgent):
     def __init__(self, index, offense=True):
         CaptureAgent.__init__(self, index)
 
@@ -281,48 +480,3 @@ class AlphaBetaAgent(CaptureAgent):
         weights = self.get_defensive_weights(game_state, index)
         # print "Defense: ", index, " | ", features*weights
         return features * weights
-
-
-class DummyAgent(CaptureAgent):
-    """
-    A Dummy agent to serve as an example of the necessary agent structure.
-    You should look at baselineTeam.py for more details about how to
-    create an agent as this is the bare minimum.
-    """
-
-    def registerInitialState(self, gameState):
-        """
-        This method handles the initial setup of the
-        agent to populate useful fields (such as what team
-        we're on).
-
-        A distanceCalculator instance caches the maze distances
-        between each pair of positions, so your agents can use:
-        self.distancer.getDistance(p1, p2)
-
-        IMPORTANT: This method may run for at most 15 seconds.
-        """
-
-        '''
-        Make sure you do not delete the following line. If you would like to
-        use Manhattan distances instead of maze distances in order to save
-        on initialization time, please take a look at
-        CaptureAgent.registerInitialState in captureAgents.py.
-        '''
-        CaptureAgent.registerInitialState(self, gameState)
-
-        '''
-        Your initialization code goes here, if you need any.
-        '''
-
-    def chooseAction(self, gameState):
-        """
-        Picks among actions randomly.
-        """
-        actions = gameState.getLegalActions(self.index)
-
-        '''
-        You should change this in your own agent.
-        '''
-
-        return random.choice(actions)
