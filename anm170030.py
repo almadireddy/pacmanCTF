@@ -191,16 +191,26 @@ class OffenseAgent(AlphaBetaAgent):
             distance_to_food = min([self.getMazeDistance(my_pos, food) for food in food_list])
 
         is_pac_man = agent_state.isPacman
-        if not is_pac_man:
-            opposite = game_state.data.layout.getFurthestCorner(self.startPosition)
-            distance_to_minimize = self.getMazeDistance(game_state.getAgentPosition(index),
-                                                        opposite)
-        else:
-            if agent_state.numCarrying > 5:
-                distance_to_minimize = self.getMazeDistance(game_state.getAgentPosition(index),
-                                                            self.startPosition)
-            else:
-                distance_to_minimize = distance_to_food
+
+        return_home = 0
+
+        enemies = [game_state.getAgentState(i) for i in self.getOpponents(game_state)]
+        ghosts = [a for a in enemies if not a.isPacman and a.getPosition() is not None]
+
+        nearest_ghost = 0
+
+        if len(ghosts) > 0:
+            dists = [self.getMazeDistance(game_state.getAgentPosition(self.index), a.getPosition()) for a in ghosts]
+            nearest_ghost = min(dists)
+
+        if nearest_ghost > 3:  # ghost distance threshold
+            nearest_ghost = 0
+        elif 0 < nearest_ghost <= 3:
+            return_home = self.getMazeDistance(game_state.getAgentPosition(index),
+                                               self.startPosition)
+
+        if return_home > 0:
+            num_carrying = -num_carrying
 
         to_return = {
             'score': score,
@@ -209,7 +219,8 @@ class OffenseAgent(AlphaBetaAgent):
             'isPacMan': 1 if is_pac_man else 0,
             'numCarrying': num_carrying,
             'foodRemaining': food_remaining,
-            'distanceToMinimize': distance_to_minimize
+            'returnHome': return_home,
+            'nearestGhost': nearest_ghost
         }
 
         print "   -- ", to_return
@@ -231,8 +242,10 @@ class OffenseAgent(AlphaBetaAgent):
                 'score': -1000,
                 'closestFood': -500,
                 'isPacMan': 50,
-                'numCarrying': 250,
-                'foodRemaining': -500
+                'numCarrying': 2500,
+                'foodRemaining': -500,
+                'nearestGhost': 3000,
+                'returnHome': -5000
             }
 
 
@@ -244,10 +257,44 @@ class DefenseAgent(AlphaBetaAgent):
         # type: (GameState) -> None
         CaptureAgent.registerInitialState(self, game_state)
 
-    def chooseAction(self, game_state):
-        # type: (GameState) -> str
-        legal_actions = game_state.getLegalActions(self.index)
-        return legal_actions[random.randint(0, len(legal_actions)-1)]
+    def get_features(self, game_state, index=0):
+        # type: (GameState, int) -> dict
+        agent_state = game_state.getAgentState(self.index)
+        my_pos = agent_state.getPosition()
+        enemies = [game_state.getAgentState(i) for i in self.getOpponents(game_state)]
+        invaders = [a for a in enemies if a.isPacman and a.getPosition() is not None]
+        num_invaders = len(invaders)
+
+        capsules = self.getCapsulesYouAreDefending(game_state)
+
+        if len(capsules) > 0:
+            closest_capsule = min([self.getMazeDistance(my_pos, c) for c in capsules])
+        else:
+            closest_capsule = 0
+
+        if len(invaders) > 0:
+            invader_distance = min([self.getMazeDistance(my_pos, a.getPosition()) for a in invaders])
+        else:
+            invader_distance = 0
+
+        to_return = {
+            'numInvaders': num_invaders,
+            'invaderDistance': invader_distance,
+            'closestCapsule': closest_capsule
+        }
+
+        print "Defense Features: ", to_return
+
+        return to_return
+
+    def get_weights(self, maximizer=True):
+        # type: (bool) -> dict
+
+        return {
+            "numInvaders": -2000,
+            "invaderDistance": -75,
+            "closestCapsule": -50
+        }
 
 
 class OldABAgent(CaptureAgent):
