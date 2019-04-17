@@ -25,6 +25,8 @@ import math
 
 infinity = float('inf')
 
+DEBUG_OFFENSE = True
+DEBUG_DEFENSE = False
 
 def createTeam(firstIndex, secondIndex, isRed,
                first='OffenseAgent', second='DefenseAgent'):
@@ -117,13 +119,14 @@ class AlphaBetaAgent(CaptureAgent):
             x = [x for x in game_state.getLegalActions(self.index) if x != "Stop"]
             for ac in x:
                 v = min_value(game_state.generateSuccessor(self.index, ac), a, b, 1, self.index)
-                print "Action: ", ac, "| Score:", v
+                if DEBUG_OFFENSE:
+                    print "Action: ", ac, "| Score:", v
                 if v > best_score:
                     best_score = v
                     best_action = ac
-
-            print " -- Best Value:", best_score, "| Best Action:", best_action
-            print " "
+            if DEBUG_OFFENSE:
+                print " -- Best Value:", best_score, "| Best Action:", best_action
+                print " "
             return best_action
 
         return alpha_beta_cutoff_search(gameState, 4)
@@ -156,7 +159,8 @@ class AlphaBetaAgent(CaptureAgent):
 class OffenseAgent(AlphaBetaAgent):
     def __init__(self, index):
         CaptureAgent.__init__(self, index)
-        print "My Index:", index
+        if DEBUG_OFFENSE:
+            print "My Index:", index
         self.startPosition = (0, 0)
         self.isRed = False
 
@@ -166,30 +170,29 @@ class OffenseAgent(AlphaBetaAgent):
         self.startPosition = game_state.getInitialAgentPosition(self.index)
         if self.index in game_state.getRedTeamIndices():
             self.isRed = True
-        print self.startPosition
+
+        if DEBUG_OFFENSE:
+            print self.startPosition
 
     def get_features(self, game_state, index=0):
         # type: (GameState, int) -> dict
-        distance_from_start = self.getMazeDistance(game_state.getAgentPosition(self.index),
-                                                   self.startPosition)
 
         score = self.getScore(game_state)
         agent_state = game_state.getAgentState(index)
         num_carrying = agent_state.numCarrying
-        ''' self.isPacman = isPacman
-            self.scaredTimer = 0
-            self.numCarrying = 0
-            self.numReturned = 0
-        '''
 
         food_list = self.getFood(game_state).asList()
+        capsule_list = self.getCapsules(game_state)
         distance_to_food = 0
+        distance_to_capsule = 0
         food_remaining = len(food_list)
+        capsules_remaining = len(capsule_list)
+        my_position = agent_state.getPosition()
 
         if len(food_list) > 0:
-            my_pos = agent_state.getPosition()
-            distance_to_food = min([self.getMazeDistance(my_pos, food) for food in food_list])
-
+            distance_to_food = min([self.getMazeDistance(my_position, food) for food in food_list])
+        if len(capsule_list) > 0:
+            distance_to_capsule = min([self.getMazeDistance(my_position, capsule) for capsule in capsule_list])
         is_pac_man = agent_state.isPacman
 
         return_home = 0
@@ -203,32 +206,34 @@ class OffenseAgent(AlphaBetaAgent):
             dists = [self.getMazeDistance(game_state.getAgentPosition(self.index), a.getPosition()) for a in ghosts]
             nearest_ghost = min(dists)
 
+        num_legal_moves = 0
+
         if nearest_ghost > 3:  # ghost distance threshold
             nearest_ghost = 0
         elif 0 < nearest_ghost <= 3:
-            return_home = self.getMazeDistance(game_state.getAgentPosition(index),
-                                               self.startPosition)
-
-        if return_home > 0:
-            num_carrying = -num_carrying
+            num_legal_moves = len(game_state.getLegalActions(self.index))
+            if is_pac_man:
+                distance_to_capsule *= 10
 
         to_return = {
             'score': score,
-            'distanceFromStart': distance_from_start,
             'closestFood': distance_to_food,
             'isPacMan': 1 if is_pac_man else 0,
             'numCarrying': num_carrying,
             'foodRemaining': food_remaining,
+            'capsuleRemaining': capsules_remaining,
             'returnHome': return_home,
-            'nearestGhost': nearest_ghost
+            'nearestGhost': nearest_ghost,
+            'closestCapsule': distance_to_capsule,
+            'numLegalMoves': num_legal_moves
         }
 
-        print "   -- ", to_return
+        if DEBUG_OFFENSE:
+            print "   -- ", to_return
         return to_return
 
     def get_weights(self, maximizer=True):
         # type: (bool) -> dict
-
         if maximizer:
             return {
                 'score': -10,
@@ -239,13 +244,15 @@ class OffenseAgent(AlphaBetaAgent):
             }
         else:
             return {
-                'score': -1000,
+                'score': 8000,
                 'closestFood': -500,
                 'isPacMan': 50,
-                'numCarrying': 2500,
-                'foodRemaining': -500,
-                'nearestGhost': 3000,
-                'returnHome': -5000
+                'numCarrying': 3000,
+                'foodRemaining': -2500,
+                'nearestGhost': 5000,
+                'returnHome': -8000,
+                'closestCapsule': -1500,
+                'numLegalMoves': 8000
             }
 
 
@@ -266,9 +273,19 @@ class DefenseAgent(AlphaBetaAgent):
         num_invaders = len(invaders)
 
         capsules = self.getCapsulesYouAreDefending(game_state)
-
         if len(capsules) > 0:
-            closest_capsule = min([self.getMazeDistance(my_pos, c) for c in capsules])
+            start_loc = game_state.getInitialAgentPosition(self.getOpponents(game_state)[0])
+
+            closest_capsule_loc = capsules[0]
+            closest_capsule_distance = self.getMazeDistance(start_loc, closest_capsule_loc)
+
+            for c in capsules:
+                dist = self.getMazeDistance(start_loc, c)
+                if dist < closest_capsule_distance:
+                    closest_capsule_loc = c
+                    closest_capsule_distance = dist
+
+            closest_capsule = self.getMazeDistance(agent_state.getPosition(), closest_capsule_loc)
         else:
             closest_capsule = 0
 
@@ -283,7 +300,8 @@ class DefenseAgent(AlphaBetaAgent):
             'closestCapsule': closest_capsule
         }
 
-        print "Defense Features: ", to_return
+        if DEBUG_DEFENSE:
+            print "Defense Features: ", to_return
 
         return to_return
 
@@ -292,6 +310,6 @@ class DefenseAgent(AlphaBetaAgent):
 
         return {
             "numInvaders": -2000,
-            "invaderDistance": -75,
+            "invaderDistance": -100,
             "closestCapsule": -50
         }
