@@ -25,7 +25,7 @@ import math
 
 infinity = float('inf')
 
-DEBUG_OFFENSE = True
+DEBUG_OFFENSE = False
 DEBUG_DEFENSE = False
 
 def createTeam(firstIndex, secondIndex, isRed,
@@ -195,24 +195,27 @@ class OffenseAgent(AlphaBetaAgent):
             distance_to_capsule = min([self.getMazeDistance(my_position, capsule) for capsule in capsule_list])
         is_pac_man = agent_state.isPacman
 
-        return_home = 0
+        return_home = -1
 
         enemies = [game_state.getAgentState(i) for i in self.getOpponents(game_state)]
         ghosts = [a for a in enemies if not a.isPacman and a.getPosition() is not None]
 
         nearest_ghost = 0
+        nearest_ghost_scared = False
 
         if len(ghosts) > 0:
             dists = [self.getMazeDistance(game_state.getAgentPosition(self.index), a.getPosition()) for a in ghosts]
             nearest_ghost = min(dists)
+            nearest_ghost_index = dists.index(min(dists))
+            nearest_ghost_scared = enemies[nearest_ghost_index].scaredTimer > 0
 
         num_legal_moves = 0
 
-        if nearest_ghost > 5:  # ghost distance threshold
+        if nearest_ghost > 5 or nearest_ghost_scared:  # ghost distance threshold
             nearest_ghost = 0
 
         if num_carrying >= 2:
-            return_home *= 150
+            return_home = 0
 
         to_return = {
             'score': score,
